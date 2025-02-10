@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const https = require('https');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const env = require('./environments/environments');
@@ -104,7 +104,8 @@ app.post(`${env.apiPaths.base}/auth/signup`, async (req, res) => {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create new user
     const user = new User({
