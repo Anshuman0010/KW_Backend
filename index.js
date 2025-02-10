@@ -18,6 +18,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Test API endpoint
+app.get('/test', (req, res) => {
+  res.json({ 
+    status: 'success',
+    message: 'API is working!',
+    timestamp: new Date(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Connect to MongoDB
 mongoose.connect(env.mongoUri)
   .then(() => console.log('🚀 Connected to MongoDB'))
