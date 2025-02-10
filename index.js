@@ -13,8 +13,10 @@ const app = express();
 
 // Enable CORS for your frontend domain
 app.use(cors({
-  origin: env.clientUrl,
-  credentials: true
+  origin: '*',
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
