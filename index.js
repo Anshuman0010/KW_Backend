@@ -357,8 +357,24 @@ app.get(`${env.apiPaths.base}/auth/admin/verify`, async (req, res) => {
 // Alumni routes
 app.get(`${env.apiPaths.base}/admin/alumni`, verifyAdmin, async (req, res) => {
   try {
-    const alumni = await Alumni.find().sort({ createdAt: -1 });
-    res.json(alumni);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 6;
+    const skip = (page - 1) * limit;
+
+    const [alumni, total] = await Promise.all([
+      Alumni.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Alumni.countDocuments()
+    ]);
+
+    res.json({
+      alumni,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (error) {
     console.error('Error fetching alumni:', error);
     res.status(500).json({ message: 'Server error' });
@@ -383,6 +399,38 @@ app.get(`${env.apiPaths.base}/alumni`, async (req, res) => {
     res.json(alumni);
   } catch (error) {
     console.error('Error fetching alumni:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update alumni
+app.put(`${env.apiPaths.base}/admin/alumni/:id`, verifyAdmin, async (req, res) => {
+  try {
+    const alumni = await Alumni.findByIdAndUpdate(
+      req.params.id,
+      { ...req.body, updatedAt: Date.now() },
+      { new: true }
+    );
+    if (!alumni) {
+      return res.status(404).json({ message: 'Alumni not found' });
+    }
+    res.json(alumni);
+  } catch (error) {
+    console.error('Error updating alumni:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete alumni
+app.delete(`${env.apiPaths.base}/admin/alumni/:id`, verifyAdmin, async (req, res) => {
+  try {
+    const alumni = await Alumni.findByIdAndDelete(req.params.id);
+    if (!alumni) {
+      return res.status(404).json({ message: 'Alumni not found' });
+    }
+    res.json({ message: 'Alumni deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting alumni:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
