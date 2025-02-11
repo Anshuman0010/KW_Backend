@@ -8,6 +8,8 @@ require('dotenv').config();
 const env = require('./environments/environments');
 
 const User = require('./models/User');
+const Admin = require('./models/Admin');
+const Alumni = require('./models/Alumni');
 
 const app = express();
 
@@ -37,6 +39,32 @@ mongoose.connect(env.mongoUri)
 
 // Blacklist for storing invalidated tokens
 const tokenBlacklist = new Set();
+
+// Middleware to verify admin token
+const verifyAdmin = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, env.jwtSecret);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized as admin' });
+    }
+
+    const admin = await Admin.findById(decoded.id);
+    if (!admin) {
+      return res.status(401).json({ message: 'Admin not found' });
+    }
+
+    req.admin = admin;
+    next();
+  } catch (error) {
+    console.error('Admin verification error:', error);
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -95,6 +123,12 @@ app.post(`${env.apiPaths.base}/auth/verify-email`, (req, res) => {
     console.error("❌ HTTP Request Error:", err.message);
     res.status(500).json({ error: "Failed to fetch email" });
   });
+});
+
+// Log incoming requests
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path}`);
+  next();
 });
 
 // Signup endpoint
@@ -211,6 +245,146 @@ app.post(`${env.apiPaths.base}/auth/logout`, verifyToken, (req, res) => {
     tokenBlacklist.add(token);
   }
   res.json({ message: 'Logged out successfully' });
+});
+
+// Admin routes
+app.post(`${env.apiPaths.base}/auth/admin/signup`, async (req, res) => {
+  try {
+    console.log('📝 Admin signup attempt:', req.body.email);
+    const { email, password } = req.body;
+    
+    // Check if admin already exists
+    const existingAdmin = await Admin.findOne({ email });
+    if (existingAdmin) {
+      return res.status(400).json({ message: 'Admin already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Create new admin
+    const admin = new Admin({
+      email,
+      password: hashedPassword,
+      createdAt: new Date()
+    });
+
+    await admin.save();
+    res.status(201).json({ message: 'Admin created successfully' });
+  } catch (error) {
+    console.error('Admin signup error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Admin Login
+app.post(`${env.apiPaths.base}/auth/admin/login`, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Find admin
+    const admin = await Admin.findOne({ email });
+    if (!admin) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, admin.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Update last login
+    admin.lastLogin = new Date();
+    await admin.save();
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: admin._id,
+        email: admin.email,
+        role: 'admin'
+      },
+      env.jwtSecret,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      admin: {
+        id: admin._id,
+        email: admin.email
+      }
+    });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Verify Admin Token with proper authentication
+app.get(`${env.apiPaths.base}/auth/admin/verify`, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, env.jwtSecret);
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized as admin' });
+    }
+
+    const admin = await Admin.findById(decoded.id).select('-password');
+    if (!admin) {
+      return res.status(401).json({ message: 'Admin not found' });
+    }
+
+    res.json({ 
+      message: 'Admin verified',
+      admin: {
+        id: admin._id,
+        email: admin.email
+      }
+    });
+  } catch (error) {
+    console.error('Admin verification error:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
+});
+
+// Alumni routes
+app.get(`${env.apiPaths.base}/admin/alumni`, verifyAdmin, async (req, res) => {
+  try {
+    const alumni = await Alumni.find().sort({ createdAt: -1 });
+    res.json(alumni);
+  } catch (error) {
+    console.error('Error fetching alumni:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post(`${env.apiPaths.base}/admin/alumni`, verifyAdmin, async (req, res) => {
+  try {
+    const alumni = new Alumni(req.body);
+    await alumni.save();
+    res.status(201).json(alumni);
+  } catch (error) {
+    console.error('Error creating alumni:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Public Alumni routes
+app.get(`${env.apiPaths.base}/alumni`, async (req, res) => {
+  try {
+    const alumni = await Alumni.find({ isActive: true }).sort({ rating: -1 });
+    res.json(alumni);
+  } catch (error) {
+    console.error('Error fetching alumni:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 const PORT = env.port;

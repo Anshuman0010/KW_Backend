@@ -1,8 +1,8 @@
 const environments = {
   development: {
     port: process.env.PORT || 3001,
-    mongoUri: process.env.MONGODB_URI || 'mongodb+srv://sanamsahu2025:1wOCrtZn3vJMJ7w9@cluster0.mr4wz.mongodb.net/KW?retryWrites=true&w=majority&appName=Cluster0',
-    jwtSecret: process.env.JWT_SECRET || 'your_super_secret_key_here',
+    mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/kiitwallah',
+    jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
     clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
     serverUrl: process.env.SERVER_URL || 'http://localhost:3001',
     apiPaths: {
@@ -11,7 +11,12 @@ const environments = {
         signup: process.env.AUTH_SIGNUP_PATH || '/auth/signup',
         login: process.env.AUTH_LOGIN_PATH || '/auth/login',
         logout: process.env.AUTH_LOGOUT_PATH || '/auth/logout',
-        verifyEmail: process.env.AUTH_VERIFY_EMAIL_PATH || '/auth/verify-email'
+        verifyEmail: process.env.AUTH_VERIFY_EMAIL_PATH || '/auth/verify-email',
+        admin: {
+          login: '/auth/admin/login',
+          signup: '/auth/admin/signup',
+          verify: '/auth/admin/verify'
+        }
       },
       user: {
         profile: process.env.USER_PROFILE_PATH || '/user/profile'
@@ -30,7 +35,12 @@ const environments = {
         signup: process.env.AUTH_SIGNUP_PATH || '/auth/signup',
         login: process.env.AUTH_LOGIN_PATH || '/auth/login',
         logout: process.env.AUTH_LOGOUT_PATH || '/auth/logout',
-        verifyEmail: process.env.AUTH_VERIFY_EMAIL_PATH || '/auth/verify-email'
+        verifyEmail: process.env.AUTH_VERIFY_EMAIL_PATH || '/auth/verify-email',
+        admin: {
+          login: '/auth/admin/login',
+          signup: '/auth/admin/signup',
+          verify: '/auth/admin/verify'
+        }
       },
       user: {
         profile: process.env.USER_PROFILE_PATH || '/user/profile'
