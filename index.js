@@ -6,12 +6,24 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const env = require('./environments/environments');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const User = require('./models/User');
 const Admin = require('./models/Admin');
 const Alumni = require('./models/Alumni');
 
 const app = express();
+
+// Move this line before all routes and update the path
+const assetsDir = path.join(__dirname, 'assets');
+if (!fs.existsSync(assetsDir)) {
+  fs.mkdirSync(assetsDir, { recursive: true });
+}
+
+// Update the static file serving path
+app.use('/assets', express.static(assetsDir));
 
 // Enable CORS for your frontend domain
 app.use(cors({
@@ -432,6 +444,152 @@ app.delete(`${env.apiPaths.base}/admin/alumni/:id`, verifyAdmin, async (req, res
   } catch (error) {
     console.error('Error deleting alumni:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Configure multer for PDF storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, assetsDir); // Use the absolute path
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const safeFileName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, `${uniqueSuffix}-${safeFileName}`);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed!'), false);
+    }
+  },
+  limits: {
+    fileSize: 25 * 1024 * 1024 // Increased to 25MB limit
+  }
+});
+
+// Add error handling middleware for Multer errors
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ 
+        message: 'File is too large. Maximum size is 25MB' 
+      });
+    }
+    return res.status(400).json({ 
+      message: `Upload error: ${err.message}` 
+    });
+  }
+  next(err);
+};
+
+// Create Resource model
+const resourceSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  description: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  filename: {
+    type: String,
+    required: true
+  },
+  originalName: {
+    type: String,
+    required: true
+  },
+  filepath: {
+    type: String,
+    required: true
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    required: true
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const Resource = mongoose.model('Resource', resourceSchema);
+
+// Resource routes with error handling
+app.post(
+  `${env.apiPaths.base}${env.apiPaths.admin.resources}`, 
+  verifyAdmin,
+  (req, res, next) => {
+    upload.single('pdf')(req, res, (err) => {
+      if (err) {
+        handleMulterError(err, req, res, next);
+      } else {
+        next();
+      }
+    });
+  },
+  async (req, res) => {
+    try {
+      const { title, description } = req.body;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ message: 'No PDF file uploaded' });
+      }
+
+      const resource = new Resource({
+        title,
+        description,
+        filename: file.filename,
+        originalName: file.originalname,
+        filepath: file.path,
+        uploadedBy: req.admin._id
+      });
+
+      await resource.save();
+      res.status(201).json(resource);
+    } catch (error) {
+      console.error('Error uploading resource:', error);
+      res.status(500).json({ message: 'Error uploading resource' });
+    }
+  }
+);
+
+app.get(`${env.apiPaths.base}${env.apiPaths.admin.resources}`, verifyAdmin, async (req, res) => {
+  try {
+    const resources = await Resource.find().sort({ uploadedAt: -1 });
+    res.json(resources);
+  } catch (error) {
+    console.error('Error fetching resources:', error);
+    res.status(500).json({ message: 'Error fetching resources' });
+  }
+});
+
+app.delete(`${env.apiPaths.base}${env.apiPaths.admin.resources}/:id`, verifyAdmin, async (req, res) => {
+  try {
+    const resource = await Resource.findById(req.params.id);
+    if (!resource) {
+      return res.status(404).json({ message: 'Resource not found' });
+    }
+
+    // Delete file from assets folder
+    fs.unlinkSync(resource.filepath);
+    await Resource.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'Resource deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting resource:', error);
+    res.status(500).json({ message: 'Error deleting resource' });
   }
 });
 

@@ -18,6 +18,10 @@ const environments = {
           verify: '/auth/admin/verify'
         }
       },
+      admin: {
+        alumni: '/admin/alumni',
+        resources: '/admin/resources'
+      },
       user: {
         profile: process.env.USER_PROFILE_PATH || '/user/profile'
       }
@@ -41,6 +45,10 @@ const environments = {
           signup: '/auth/admin/signup',
           verify: '/auth/admin/verify'
         }
+      },
+      admin: {
+        alumni: '/admin/alumni',
+        resources: '/admin/resources'
       },
       user: {
         profile: process.env.USER_PROFILE_PATH || '/user/profile'
